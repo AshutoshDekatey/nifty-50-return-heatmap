@@ -10,6 +10,7 @@ A Streamlit dashboard that compares the arithmetic average daily returns of the 
 - Average daily return shown on each tile
 - Cumulative return, industry, and observation count on hover
 - Symmetric red-to-green colouring centred on zero
+- Batched downloads with automatic retries for tickers omitted by Yahoo Finance
 
 ## Run locally
 
@@ -59,7 +60,8 @@ Constituents and prices are cached for 24 hours. Ordinary Streamlit reruns—suc
 
 This hybrid approach avoids unnecessary API requests while ensuring the app does not remain stale indefinitely.
 
+Yahoo Finance may occasionally return only part of a large multi-ticker request. The app downloads stocks in batches of ten, retries missing symbols in batches of five, and stops with a clear error instead of displaying a misleading one-stock heatmap when fewer than 40 stocks are available.
+
 ## Important limitation
 
 The dashboard uses today's NIFTY 50 constituent list across the selected trailing period. It does not reconstruct historical index membership, so longer-period comparisons can contain survivorship bias.
-

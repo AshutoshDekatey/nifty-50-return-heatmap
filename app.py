@@ -51,27 +51,84 @@ def get_nifty_constituents() -> pd.DataFrame:
 
 
 @st.cache_data(ttl=24 * 60 * 60, show_spinner=False)
-def download_market_data(tickers: tuple[str, ...], period: str) -> tuple[pd.DataFrame, datetime]:
-    """Download adjusted daily closing prices for all tickers in one request."""
-    raw = yf.download(
-        list(tickers),
-        period=period,
-        interval="1d",
-        auto_adjust=True,
-        progress=False,
-        threads=True,
-        group_by="column",
-    )
+def download_market_data(
+    tickers: tuple[str, ...], period: str
+) -> tuple[pd.DataFrame, datetime, tuple[str, ...]]:
+    """Download adjusted closes in small batches and retry missing tickers."""
 
-    if raw.empty:
-        raise ValueError("Yahoo Finance returned no market data.")
+    def extract_close(raw: pd.DataFrame, requested: tuple[str, ...]) -> pd.DataFrame:
+        if raw.empty:
+            return pd.DataFrame()
 
-    close = raw["Close"]
-    if isinstance(close, pd.Series):
-        close = close.to_frame(name=tickers[0])
+        if isinstance(raw.columns, pd.MultiIndex):
+            if "Close" in raw.columns.get_level_values(0):
+                close = raw["Close"]
+            elif "Close" in raw.columns.get_level_values(1):
+                close = raw.xs("Close", axis=1, level=1)
+            else:
+                return pd.DataFrame()
+        elif "Close" in raw.columns:
+            close = raw["Close"]
+        else:
+            return pd.DataFrame()
+
+        if isinstance(close, pd.Series):
+            close = close.to_frame(name=requested[0])
+
+        close.columns = [str(column).upper() for column in close.columns]
+        if len(requested) == 1 and close.shape[1] == 1:
+            close.columns = [requested[0]]
+        return close.dropna(axis=1, how="all")
+
+    def fetch_batch(batch: tuple[str, ...]) -> pd.DataFrame:
+        raw = yf.download(
+            list(batch),
+            period=period,
+            interval="1d",
+            auto_adjust=True,
+            progress=False,
+            threads=False,
+            group_by="column",
+            timeout=20,
+        )
+        return extract_close(raw, batch)
+
+    frames: list[pd.DataFrame] = []
+    for start in range(0, len(tickers), 10):
+        batch = tickers[start : start + 10]
+        batch_close = fetch_batch(batch)
+        if not batch_close.empty:
+            frames.append(batch_close)
+
+    close = pd.concat(frames, axis=1) if frames else pd.DataFrame()
+    close = close.loc[:, ~close.columns.duplicated(keep="last")]
+
+    available = set(close.columns)
+    missing = tuple(ticker for ticker in tickers if ticker not in available)
+
+    # Yahoo sometimes returns a partial batch without raising an exception.
+    retry_frames: list[pd.DataFrame] = []
+    for start in range(0, len(missing), 5):
+        retry_batch = missing[start : start + 5]
+        retry_close = fetch_batch(retry_batch)
+        if not retry_close.empty:
+            retry_frames.append(retry_close)
+
+    if retry_frames:
+        close = pd.concat([close, *retry_frames], axis=1)
+        close = close.loc[:, ~close.columns.duplicated(keep="last")]
+
+    close = close.reindex(columns=list(tickers)).dropna(axis=1, how="all")
+    missing = tuple(ticker for ticker in tickers if ticker not in close.columns)
+
+    if close.shape[1] < 40:
+        raise ValueError(
+            f"Yahoo Finance returned usable history for only {close.shape[1]} of "
+            f"{len(tickers)} stocks. Use Refresh market data to retry."
+        )
 
     close = close.sort_index().dropna(how="all")
-    return close, datetime.now(IST)
+    return close, datetime.now(IST), missing
 
 
 def calculate_metrics(close: pd.DataFrame, constituents: pd.DataFrame) -> pd.DataFrame:
@@ -206,7 +263,9 @@ try:
     with st.spinner("Loading NIFTY 50 market data..."):
         constituents = get_nifty_constituents()
         tickers = tuple(constituents["Ticker"])
-        close_prices, fetched_at = download_market_data(tickers, PERIODS[selected_label])
+        close_prices, fetched_at, missing_tickers = download_market_data(
+            tickers, PERIODS[selected_label]
+        )
         metrics = calculate_metrics(close_prices, constituents)
 
     if metrics.empty:
@@ -219,6 +278,15 @@ try:
             f"Market data through **{latest_market_date}**  ·  "
             f"Fetched **{fetched_at.strftime('%d %b %Y, %I:%M %p IST')}**  ·  "
             f"{len(metrics)} stocks"
+        )
+
+    if missing_tickers:
+        missing_symbols = ", ".join(
+            ticker.removesuffix(".NS") for ticker in missing_tickers
+        )
+        st.warning(
+            f"Yahoo Finance did not return data for {len(missing_tickers)} stock(s): "
+            f"{missing_symbols}. The remaining stocks are shown."
         )
 
     render_heatmap(metrics)
