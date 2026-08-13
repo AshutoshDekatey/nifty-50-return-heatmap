@@ -11,6 +11,7 @@ A Streamlit dashboard that compares the arithmetic average daily returns of the 
 - Cumulative return, industry, and observation count on hover
 - Symmetric red-to-green colouring centred on zero
 - Batched downloads with automatic retries for tickers omitted by Yahoo Finance
+- Native Streamlit row-and-column tile rendering for reliable cloud display
 
 ## Run locally
 
