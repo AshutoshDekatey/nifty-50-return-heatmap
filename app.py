@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 import requests
 import streamlit as st
+import streamlit.components.v1 as components
 import yfinance as yf
 
 
@@ -228,6 +229,149 @@ def render_heatmap(metrics: pd.DataFrame) -> None:
             column.markdown(card, unsafe_allow_html=True)
 
 
+def render_system_animation() -> None:
+    """Show an animated, conceptual view of the dashboard data pipeline."""
+    components.html(
+        """
+        <!doctype html>
+        <html lang="en">
+        <head>
+        <meta charset="utf-8">
+        <style>
+          * { box-sizing: border-box; }
+          body {
+            margin: 0;
+            padding: 8px 4px 4px;
+            background: transparent;
+            color: #17202a;
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+              "Segoe UI", sans-serif;
+          }
+          .pipeline {
+            display: grid;
+            grid-template-columns: minmax(145px,1fr) 58px minmax(145px,1fr) 58px minmax(145px,1fr);
+            align-items: center;
+            gap: 4px;
+            max-width: 1050px;
+            margin: 0 auto;
+          }
+          .node {
+            min-height: 122px;
+            border: 1px solid #dfe5eb;
+            border-radius: 16px;
+            background: linear-gradient(145deg,#ffffff,#f4f7f9);
+            padding: 18px 14px;
+            text-align: center;
+            box-shadow: 0 5px 18px rgba(31,45,61,.07);
+            animation: breathe 3.6s ease-in-out infinite;
+          }
+          .node:nth-of-type(3) { animation-delay: .6s; }
+          .node:nth-of-type(5) { animation-delay: 1.2s; }
+          .icon { font-size: 27px; line-height: 1; }
+          .title { margin-top: 10px; font-size: 14px; font-weight: 750; }
+          .detail { margin-top: 6px; color: #647381; font-size: 11px; line-height: 1.35; }
+          .flow {
+            height: 4px;
+            position: relative;
+            border-radius: 4px;
+            background: #dce4e9;
+            overflow: visible;
+          }
+          .flow::after {
+            content: "";
+            position: absolute;
+            top: -4px;
+            left: -2px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #16834c;
+            box-shadow: 0 0 0 5px rgba(22,131,76,.13);
+            animation: travel 2.1s ease-in-out infinite;
+          }
+          .flow.second::after { animation-delay: 1.05s; }
+          .subflow {
+            display: grid;
+            grid-template-columns: repeat(3,1fr);
+            gap: 10px;
+            max-width: 720px;
+            margin: 18px auto 0;
+          }
+          .pill {
+            border-radius: 999px;
+            padding: 8px 10px;
+            background: #edf3f0;
+            color: #37554a;
+            font-size: 11px;
+            text-align: center;
+          }
+          .legend {
+            margin-top: 15px;
+            color: #70808d;
+            text-align: center;
+            font-size: 11px;
+          }
+          @keyframes travel {
+            0% { left: -2px; opacity: 0; transform: scale(.7); }
+            15% { opacity: 1; }
+            85% { opacity: 1; }
+            100% { left: calc(100% - 10px); opacity: 0; transform: scale(1); }
+          }
+          @keyframes breathe {
+            0%,100% { transform: translateY(0); border-color: #dfe5eb; }
+            50% { transform: translateY(-3px); border-color: #a8cbbb; }
+          }
+          @media (max-width: 720px) {
+            .pipeline { grid-template-columns: 1fr; gap: 8px; }
+            .flow { width: 4px; height: 34px; margin: 0 auto; }
+            .flow::after { top: -2px; left: -4px; animation: travel-down 2.1s ease-in-out infinite; }
+            .subflow { grid-template-columns: 1fr; }
+            @keyframes travel-down {
+              0% { top: -2px; opacity: 0; }
+              15% { opacity: 1; }
+              85% { opacity: 1; }
+              100% { top: calc(100% - 10px); opacity: 0; }
+            }
+          }
+          @media (prefers-reduced-motion: reduce) {
+            .node, .flow::after { animation: none; }
+          }
+        </style>
+        </head>
+        <body>
+          <div class="pipeline" role="img" aria-label="Animated NIFTY return dashboard data pipeline">
+            <div class="node">
+              <div class="icon">🏛️</div>
+              <div class="title">1. Identify the universe</div>
+              <div class="detail">Load the current NIFTY 50 company symbols from Nifty Indices.</div>
+            </div>
+            <div class="flow"></div>
+            <div class="node">
+              <div class="icon">📥</div>
+              <div class="title">2. Retrieve market history</div>
+              <div class="detail">Fetch adjusted daily closing prices from Yahoo Finance in resilient batches.</div>
+            </div>
+            <div class="flow second"></div>
+            <div class="node">
+              <div class="icon">🧮</div>
+              <div class="title">3. Calculate and display</div>
+              <div class="detail">Calculate daily returns, average them, rank stocks, and map values to colour.</div>
+            </div>
+          </div>
+          <div class="subflow">
+            <div class="pill">⚡ 24-hour Streamlit cache</div>
+            <div class="pill">↻ Manual refresh clears cache</div>
+            <div class="pill">🟩 Positive · 🟥 Negative</div>
+          </div>
+          <div class="legend">The moving dots represent data passing through the pipeline; this is a conceptual system visualization.</div>
+        </body>
+        </html>
+        """,
+        height=250,
+        scrolling=False,
+    )
+
+
 st.title("NIFTY 50 Return Heatmap")
 st.caption(
     "Each equal-sized tile shows the arithmetic mean of the stock's daily returns. "
@@ -278,6 +422,11 @@ try:
         )
 
     render_heatmap(metrics)
+
+    st.divider()
+    st.subheader("How this dashboard works")
+    st.caption("A live view of the data pipeline behind the heatmap.")
+    render_system_animation()
 
     with st.expander("Metric details"):
         st.markdown(

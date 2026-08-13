@@ -12,6 +12,7 @@ A Streamlit dashboard that compares the arithmetic average daily returns of the 
 - Symmetric red-to-green colouring centred on zero
 - Batched downloads with automatic retries for tickers omitted by Yahoo Finance
 - Native Streamlit row-and-column tile rendering for reliable cloud display
+- Animated system visualization explaining the data pipeline
 
 ## Run locally
 
